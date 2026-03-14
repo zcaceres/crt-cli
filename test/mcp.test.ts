@@ -39,6 +39,59 @@ afterAll(async () => {
   await server.close();
 });
 
+describe("MCP server entry point", () => {
+  test("starts via stdio and responds to initialize", async () => {
+    const proc = Bun.spawn(["bun", "run", "src/mcp.ts"], {
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+
+    const initMessage = JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2024-11-05",
+        capabilities: {},
+        clientInfo: { name: "test", version: "1.0.0" },
+      },
+    });
+    const header = `Content-Length: ${Buffer.byteLength(initMessage)}\r\n\r\n`;
+    proc.stdin.write(header + initMessage);
+    proc.stdin.flush();
+
+    // Read response with timeout
+    const reader = proc.stdout.getReader();
+    const timeout = setTimeout(() => { proc.kill(); }, 5000);
+
+    let buf = "";
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += new TextDecoder().decode(value);
+      // Look for a complete JSON-RPC response after the headers
+      const bodyStart = buf.indexOf("\r\n\r\n");
+      if (bodyStart >= 0) {
+        const body = buf.slice(bodyStart + 4);
+        try {
+          const parsed = JSON.parse(body);
+          expect(parsed.id).toBe(1);
+          expect(parsed.result).toBeDefined();
+          expect(parsed.result.serverInfo.name).toBe("crt-sh");
+          break;
+        } catch {
+          // Incomplete JSON, keep reading
+        }
+      }
+    }
+
+    clearTimeout(timeout);
+    proc.kill();
+    await proc.exited;
+  }, 10_000);
+});
+
 describe("MCP server", () => {
   describe("tools/list", () => {
     test("lists all three tools", async () => {

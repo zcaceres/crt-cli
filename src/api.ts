@@ -1,6 +1,7 @@
 import { CrtShResponseSchema } from "./schemas";
 import type { CrtShEntry } from "./schemas";
 
+/** Error thrown by crt.sh API operations. The `code` field identifies the error category. */
 export class CrtShError extends Error {
   constructor(
     message: string,
@@ -11,6 +12,13 @@ export class CrtShError extends Error {
   }
 }
 
+/**
+ * Build the crt.sh query URL for a domain.
+ * @param query - Domain or pattern to search for.
+ * @param options.wildcard - Prefix query with `%.` for subdomain matching.
+ * @param options.excludeExpired - Exclude certificates that have expired.
+ * @returns Fully-qualified crt.sh URL with query parameters.
+ */
 export function buildUrl(
   query: string,
   options?: { wildcard?: boolean; excludeExpired?: boolean }
@@ -28,6 +36,15 @@ export function buildUrl(
 
 export const MAX_RETRIES = 3;
 
+/**
+ * Fetch a URL with retry and exponential backoff.
+ * Retries on network errors and HTTP 502; all other HTTP errors fail immediately.
+ * @param url - URL to fetch.
+ * @param options.baseDelay - Base delay in ms between retries (doubled each attempt).
+ * @param options.fetchFn - Fetch implementation (defaults to global `fetch`; injectable for testing).
+ * @returns The successful `Response`.
+ * @throws {CrtShError} With code `NETWORK_ERROR`, `SERVER_ERROR`, or `HTTP_ERROR`.
+ */
 export async function fetchWithRetry(
   url: string,
   options: { baseDelay: number; fetchFn: typeof fetch }
@@ -70,6 +87,15 @@ export async function fetchWithRetry(
   throw lastError!;
 }
 
+/**
+ * Search Certificate Transparency logs for certificates matching a domain.
+ * Results are validated against the crt.sh JSON schema.
+ * @param query - Domain or pattern to search for.
+ * @param options.wildcard - Prefix query with `%.` for subdomain matching.
+ * @param options.excludeExpired - Exclude expired certificates.
+ * @returns Array of matching certificate entries (empty array if none found).
+ * @throws {CrtShError} On network, HTTP, parse, or validation errors.
+ */
 export async function searchCertificates(
   query: string,
   options?: { wildcard?: boolean; excludeExpired?: boolean }
@@ -109,6 +135,11 @@ export async function searchCertificates(
   return result.data;
 }
 
+/**
+ * Deduplicate certificate entries by serial number, keeping the first occurrence.
+ * @param entries - Array of certificate entries to deduplicate.
+ * @returns New array with duplicate serial numbers removed.
+ */
 export function dedupeBySerial(entries: CrtShEntry[]): CrtShEntry[] {
   const seen = new Set<string>();
   return entries.filter((entry) => {
@@ -118,6 +149,11 @@ export function dedupeBySerial(entries: CrtShEntry[]): CrtShEntry[] {
   });
 }
 
+/**
+ * Validate a certificate ID string (must be a positive integer within safe range).
+ * @param id - Raw string to validate as a crt.sh certificate ID.
+ * @returns Object with `valid: true` and parsed `certId`, or `valid: false` with `reason`.
+ */
 export function validateCertId(id: string): { valid: true; certId: number } | { valid: false; reason: string } {
   if (!/^\d+$/.test(id)) {
     return { valid: false, reason: `Invalid certificate ID: ${id}` };
@@ -129,6 +165,11 @@ export function validateCertId(id: string): { valid: true; certId: number } | { 
   return { valid: true, certId };
 }
 
+/**
+ * Extract unique subdomains from certificate `name_value` fields.
+ * @param entries - Certificate entries to extract subdomains from.
+ * @returns Sorted, deduplicated array of lowercase subdomain strings.
+ */
 export function extractSubdomains(entries: CrtShEntry[]): string[] {
   const subdomains = new Set<string>();
   for (const entry of entries) {

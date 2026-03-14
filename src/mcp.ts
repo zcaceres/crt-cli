@@ -13,6 +13,7 @@ import {
 import { formatJson, formatTable, formatSubdomains } from "./format";
 import pkg from "../package.json";
 
+/** Create an MCP server with tools for searching CT logs, finding subdomains, and looking up certificates. */
 export function createServer() {
   const server = new McpServer({
     name: "crt-sh",
