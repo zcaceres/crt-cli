@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 
+import { Command, CommanderError } from "commander";
 import {
   searchCertificates,
   dedupeBySerial,
@@ -8,6 +9,7 @@ import {
   validateCertId,
 } from "./api";
 import { formatJson, formatTable, formatSubdomains, formatError } from "./format";
+import pkg from "../package.json";
 
 const DESCRIBE_OUTPUT = {
   name: "crt-cli",
@@ -109,234 +111,170 @@ const DESCRIBE_OUTPUT = {
   },
 };
 
-export function parseArgs(args: string[]) {
-  const flags: Record<string, boolean | string> = {};
-  const positional: string[] = [];
+function buildProgram() {
+  const program = new Command()
+    .name("crt")
+    .description("Agent-friendly CLI for crt.sh Certificate Transparency log search")
+    .version(pkg.version, "-V, --version")
+    .exitOverride()
+    .configureOutput({
+      writeOut: (str) => process.stdout.write(str),
+      writeErr: (str) => process.stdout.write(str),
+    });
 
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg === "--wildcard" || arg === "-w") {
-      flags.wildcard = true;
-    } else if (arg === "--exclude-expired" || arg === "-e") {
-      flags.excludeExpired = true;
-    } else if (arg === "--dedupe" || arg === "-d") {
-      flags.dedupe = true;
-    } else if (arg === "--format" || arg === "-f") {
-      const next = args[i + 1];
-      if (!next || next.startsWith("-")) {
+  program
+    .command("search")
+    .description("Search certificates for a domain in CT logs")
+    .argument("<domain>", "Domain to search for")
+    .option("-w, --wildcard", "Prefix query with %. for subdomain search", false)
+    .option("-e, --exclude-expired", "Exclude expired certificates", false)
+    .option("-f, --format <format>", "Output format: json (default), table, subdomains", "json")
+    .option("-d, --dedupe", "Deduplicate results by serial number", false)
+    .action(async (domain: string, opts: { wildcard: boolean; excludeExpired: boolean; format: string; dedupe: boolean }) => {
+      const validFormats = ["json", "table", "subdomains"];
+      if (opts.format.startsWith("-")) {
         console.error(formatError("--format requires a value (json, table, subdomains)", "MISSING_VALUE"));
         process.exit(1);
       }
-      flags.format = args[++i];
-    } else if (arg === "--help" || arg === "-h") {
-      flags.help = true;
-    } else if (arg === "--describe") {
-      flags.describe = true;
-    } else if (arg === "--") {
-      positional.push(...args.slice(i + 1));
-      break;
-    } else if (arg.startsWith("-") && Number.isNaN(Number(arg))) {
-      console.error(formatError(`Unknown flag: ${arg}`, "UNKNOWN_FLAG"));
-      process.exit(1);
-    } else {
-      positional.push(arg);
-    }
-  }
+      if (!validFormats.includes(opts.format)) {
+        console.error(formatError(`Unknown format: ${opts.format}`, "UNKNOWN_FORMAT"));
+        process.exit(1);
+      }
 
-  return { flags, positional };
-}
+      let results = await searchCertificates(domain, {
+        wildcard: opts.wildcard,
+        excludeExpired: opts.excludeExpired,
+      });
 
-function printHelp(command?: string) {
-  if (command === "search") {
-    console.log(`Usage: crt search <domain> [flags]
+      if (opts.dedupe) {
+        results = dedupeBySerial(results);
+      }
 
-Search certificates for a domain in CT logs.
+      switch (opts.format) {
+        case "json":
+          console.log(formatJson(results));
+          break;
+        case "table":
+          console.log(formatTable(results));
+          break;
+        case "subdomains":
+          console.log(formatSubdomains(extractSubdomains(results)));
+          break;
+      }
+    });
 
-Flags:
-  -w, --wildcard         Prefix query with %. for subdomain search
-  -e, --exclude-expired  Exclude expired certificates
-  -f, --format <format>  Output format: json (default), table, subdomains
-  -d, --dedupe           Deduplicate results by serial number
+  program
+    .command("subdomains")
+    .description("Find unique subdomains for a domain via CT logs")
+    .argument("<domain>", "Domain to find subdomains for")
+    .option("-e, --exclude-expired", "Exclude expired certificates", false)
+    .action(async (domain: string, opts: { excludeExpired: boolean }) => {
+      const results = await searchCertificates(domain, {
+        wildcard: true,
+        excludeExpired: opts.excludeExpired,
+      });
+      console.log(formatSubdomains(extractSubdomains(results)));
+    });
 
-Examples:
-  crt search example.com
-  crt search example.com -w -e -d
-  crt search example.com --format table`);
-  } else if (command === "subdomains") {
-    console.log(`Usage: crt subdomains <domain> [flags]
+  program
+    .command("cert")
+    .description("Look up a specific certificate by its crt.sh ID")
+    .argument("<id>", "Certificate ID on crt.sh")
+    .action(async (id: string) => {
+      const validation = validateCertId(id);
+      if (!validation.valid) {
+        console.error(formatError(validation.reason, "INVALID_ARG"));
+        process.exit(1);
+      }
+      const certId = validation.certId;
+      console.log(
+        JSON.stringify(
+          {
+            id: certId,
+            url: `https://crt.sh/?id=${certId}`,
+            note: "crt.sh does not provide a JSON API for individual certificates. Visit the URL for full details.",
+          },
+          null,
+          2
+        )
+      );
+    });
 
-Find unique subdomains for a domain via CT logs.
-Shortcut for: crt search <domain> -w --format subdomains
-
-Flags:
-  -e, --exclude-expired  Exclude expired certificates
-
-Examples:
-  crt subdomains example.com
-  crt subdomains example.com -e`);
-  } else if (command === "cert") {
-    console.log(`Usage: crt cert <id>
-
-Look up a specific certificate by its crt.sh ID.
-Returns the crt.sh URL and available metadata.
-
-Examples:
-  crt cert 12345678`);
-  } else {
-    console.log(`crt-cli — Agent-friendly CLI for crt.sh Certificate Transparency log search
-
-Usage: crt <command> [args] [flags]
-
-Commands:
-  search <domain>      Search certificates for a domain
-  subdomains <domain>  Find unique subdomains via CT logs
-  cert <id>            Look up a certificate by ID
-
-Global Flags:
-  --help, -h           Show help
-  --describe           Machine-readable JSON description of all commands
-
-Examples:
-  crt search example.com
-  crt search example.com -w -e -d --format table
-  crt subdomains example.com
-  crt cert 12345678
-  crt --describe`);
-  }
+  return program;
 }
 
 async function main() {
   const rawArgs = process.argv.slice(2);
 
-  if (rawArgs.length === 0) {
-    printHelp();
-    process.exit(0);
-  }
-
-  const { flags, positional } = parseArgs(rawArgs);
-
-  if (flags.describe) {
+  // Short-circuit --describe before Commander parses
+  if (rawArgs.includes("--describe")) {
     console.log(JSON.stringify(DESCRIBE_OUTPUT, null, 2));
     process.exit(0);
   }
 
-  if (flags.help && positional.length === 0) {
-    printHelp();
+  const program = buildProgram();
+
+  // No args → help + exit 0
+  if (rawArgs.length === 0) {
+    program.outputHelp();
     process.exit(0);
   }
 
-  const command = positional[0];
+  // Check what kind of args we have
+  const commands = ["search", "subdomains", "cert"];
+  const hasHelp = rawArgs.includes("--help") || rawArgs.includes("-h");
+  const hasVersion = rawArgs.includes("--version") || rawArgs.includes("-V");
+  const firstNonFlag = rawArgs.find(a => !a.startsWith("-"));
 
-  if (!command) {
-    printHelp();
+  if (!firstNonFlag && !hasHelp && !hasVersion) {
+    // Flags-only (no command) → help + exit 1
+    program.outputHelp();
     process.exit(1);
   }
 
-  if (flags.help) {
-    printHelp(command);
-    process.exit(0);
+  if (firstNonFlag && !commands.includes(firstNonFlag) && !hasHelp) {
+    // Unknown command
+    console.error(
+      formatError(
+        `Unknown command: ${firstNonFlag}. Run 'crt --help' for usage.`,
+        "UNKNOWN_COMMAND"
+      )
+    );
+    process.exit(1);
   }
 
   try {
-    switch (command) {
-      case "search": {
-        const domain = positional[1];
-        if (!domain) {
-          console.error(
-            formatError("Missing required argument: <domain>", "MISSING_ARG")
-          );
-          process.exit(1);
-        }
-
-        let results = await searchCertificates(domain, {
-          wildcard: flags.wildcard === true,
-          excludeExpired: flags.excludeExpired === true,
-        });
-
-        if (flags.dedupe) {
-          results = dedupeBySerial(results);
-        }
-
-        const format = (flags.format as string) ?? "json";
-        switch (format) {
-          case "json":
-            console.log(formatJson(results));
-            break;
-          case "table":
-            console.log(formatTable(results));
-            break;
-          case "subdomains":
-            console.log(formatSubdomains(extractSubdomains(results)));
-            break;
-          default:
-            console.error(
-              formatError(`Unknown format: ${format}`, "UNKNOWN_FORMAT")
-            );
-            process.exit(1);
-        }
-        break;
-      }
-
-      case "subdomains": {
-        const domain = positional[1];
-        if (!domain) {
-          console.error(
-            formatError("Missing required argument: <domain>", "MISSING_ARG")
-          );
-          process.exit(1);
-        }
-
-        const results = await searchCertificates(domain, {
-          wildcard: true,
-          excludeExpired: flags.excludeExpired === true,
-        });
-
-        console.log(formatSubdomains(extractSubdomains(results)));
-        break;
-      }
-
-      case "cert": {
-        const id = positional[1];
-        if (!id) {
-          console.error(
-            formatError("Missing required argument: <id>", "MISSING_ARG")
-          );
-          process.exit(1);
-        }
-
-        const validation = validateCertId(id);
-        if (!validation.valid) {
-          console.error(formatError(validation.reason, "INVALID_ARG"));
-          process.exit(1);
-        }
-        const certId = validation.certId;
-
-        console.log(
-          JSON.stringify(
-            {
-              id: certId,
-              url: `https://crt.sh/?id=${certId}`,
-              note: "crt.sh does not provide a JSON API for individual certificates. Visit the URL for full details.",
-            },
-            null,
-            2
-          )
-        );
-        break;
-      }
-
-      default:
-        console.error(
-          formatError(
-            `Unknown command: ${command}. Run 'crt --help' for usage.`,
-            "UNKNOWN_COMMAND"
-          )
-        );
-        process.exit(1);
-    }
+    await program.parseAsync(rawArgs, { from: "user" });
   } catch (err) {
-    if (err instanceof CrtShError) {
+    if (err instanceof CommanderError) {
+      switch (err.code) {
+        case "commander.unknownOption":
+          console.error(formatError(err.message, "UNKNOWN_FLAG"));
+          process.exit(1);
+          break;
+        case "commander.missingArgument":
+          console.error(formatError(err.message, "MISSING_ARG"));
+          process.exit(1);
+          break;
+        case "commander.optionMissingArgument":
+          console.error(formatError(err.message, "MISSING_VALUE"));
+          process.exit(1);
+          break;
+        case "commander.unknownCommand":
+          console.error(formatError(err.message, "UNKNOWN_COMMAND"));
+          process.exit(1);
+          break;
+        case "commander.helpDisplayed":
+        case "commander.version":
+          process.exit(0);
+          break;
+        default:
+          console.error(formatError(err.message, "CLI_ERROR"));
+          process.exit(1);
+      }
+    } else if (err instanceof CrtShError) {
       console.error(formatError(err.message, err.code));
+      process.exit(1);
     } else {
       console.error(
         formatError(
@@ -344,8 +282,8 @@ async function main() {
           "UNKNOWN_ERROR"
         )
       );
+      process.exit(1);
     }
-    process.exit(1);
   }
 }
 

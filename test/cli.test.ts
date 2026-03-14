@@ -20,7 +20,7 @@ describe("CLI integration", () => {
       const { stdout, exitCode } = await run();
       expect(exitCode).toBe(0);
       expect(stdout).toContain("Usage:");
-      expect(stdout).toContain("crt <command>");
+      expect(stdout).toContain("crt");
     });
 
     test("--help shows help", async () => {
@@ -38,13 +38,15 @@ describe("CLI integration", () => {
     test("search --help shows search help", async () => {
       const { stdout, exitCode } = await run("search", "--help");
       expect(exitCode).toBe(0);
-      expect(stdout).toContain("crt search <domain>");
+      expect(stdout).toContain("crt search");
+      expect(stdout).toContain("<domain>");
     });
 
     test("cert --help shows cert help", async () => {
       const { stdout, exitCode } = await run("cert", "--help");
       expect(exitCode).toBe(0);
-      expect(stdout).toContain("crt cert <id>");
+      expect(stdout).toContain("crt cert");
+      expect(stdout).toContain("<id>");
     });
 
     test("--describe outputs JSON schema", async () => {
@@ -53,6 +55,18 @@ describe("CLI integration", () => {
       const parsed = JSON.parse(stdout);
       expect(parsed.name).toBe("crt-cli");
       expect(parsed.commands).toBeArray();
+    });
+
+    test("--version shows version", async () => {
+      const { stdout, exitCode } = await run("--version");
+      expect(exitCode).toBe(0);
+      expect(stdout.trim()).toMatch(/^\d+\.\d+\.\d+$/);
+    });
+
+    test("-V shows version", async () => {
+      const { stdout, exitCode } = await run("-V");
+      expect(exitCode).toBe(0);
+      expect(stdout.trim()).toMatch(/^\d+\.\d+\.\d+$/);
     });
   });
 
