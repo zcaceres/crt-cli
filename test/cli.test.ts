@@ -20,7 +20,7 @@ describe("CLI integration", () => {
       const { stdout, exitCode } = await run();
       expect(exitCode).toBe(0);
       expect(stdout).toContain("Usage:");
-      expect(stdout).toContain("crt <command>");
+      expect(stdout).toContain("crt");
     });
 
     test("--help shows help", async () => {
@@ -55,6 +55,18 @@ describe("CLI integration", () => {
       const parsed = JSON.parse(stdout);
       expect(parsed.name).toBe("crt-cli");
       expect(parsed.commands).toBeArray();
+    });
+
+    test("--version shows version", async () => {
+      const { stdout, exitCode } = await run("--version");
+      expect(exitCode).toBe(0);
+      expect(stdout.trim()).toMatch(/^\d+\.\d+\.\d+$/);
+    });
+
+    test("-V shows version", async () => {
+      const { stdout, exitCode } = await run("-V");
+      expect(exitCode).toBe(0);
+      expect(stdout.trim()).toMatch(/^\d+\.\d+\.\d+$/);
     });
   });
 

@@ -9,6 +9,7 @@ import {
   validateCertId,
 } from "./api";
 import { formatJson, formatTable, formatSubdomains, formatError } from "./format";
+import pkg from "../package.json";
 
 const DESCRIBE_OUTPUT = {
   name: "crt-cli",
@@ -110,68 +111,11 @@ const DESCRIBE_OUTPUT = {
   },
 };
 
-function printHelp() {
-  console.log(`crt-cli — Agent-friendly CLI for crt.sh Certificate Transparency log search
-
-Usage: crt <command> [args] [flags]
-
-Commands:
-  search <domain>      Search certificates for a domain
-  subdomains <domain>  Find unique subdomains via CT logs
-  cert <id>            Look up a certificate by ID
-
-Global Flags:
-  --help, -h           Show help
-  --describe           Machine-readable JSON description of all commands
-
-Examples:
-  crt search example.com
-  crt search example.com -w -e -d --format table
-  crt subdomains example.com
-  crt cert 12345678
-  crt --describe`);
-}
-
-async function main() {
-  const rawArgs = process.argv.slice(2);
-
-  // Short-circuit --describe before Commander parses
-  if (rawArgs.includes("--describe")) {
-    console.log(JSON.stringify(DESCRIBE_OUTPUT, null, 2));
-    process.exit(0);
-  }
-
-  // No args → help + exit 0
-  if (rawArgs.length === 0) {
-    printHelp();
-    process.exit(0);
-  }
-
-  // Check what kind of args we have
-  const commands = ["search", "subdomains", "cert"];
-  const hasHelp = rawArgs.includes("--help") || rawArgs.includes("-h");
-  const firstNonFlag = rawArgs.find(a => !a.startsWith("-"));
-
-  if (!firstNonFlag && !hasHelp) {
-    // Flags-only (no command) → help + exit 1
-    printHelp();
-    process.exit(1);
-  }
-
-  if (firstNonFlag && !commands.includes(firstNonFlag) && !hasHelp) {
-    // Unknown command
-    console.error(
-      formatError(
-        `Unknown command: ${firstNonFlag}. Run 'crt --help' for usage.`,
-        "UNKNOWN_COMMAND"
-      )
-    );
-    process.exit(1);
-  }
-
+function buildProgram() {
   const program = new Command()
     .name("crt")
-    .description("crt-cli — Agent-friendly CLI for crt.sh Certificate Transparency log search")
+    .description("Agent-friendly CLI for crt.sh Certificate Transparency log search")
+    .version(pkg.version, "-V, --version")
     .exitOverride()
     .configureOutput({
       writeOut: (str) => process.stdout.write(str),
@@ -256,11 +200,48 @@ async function main() {
       );
     });
 
-  // Default action when no command is given (just flags like -w -e -d)
-  program.action(() => {
+  return program;
+}
+
+async function main() {
+  const rawArgs = process.argv.slice(2);
+
+  // Short-circuit --describe before Commander parses
+  if (rawArgs.includes("--describe")) {
+    console.log(JSON.stringify(DESCRIBE_OUTPUT, null, 2));
+    process.exit(0);
+  }
+
+  const program = buildProgram();
+
+  // No args → help + exit 0
+  if (rawArgs.length === 0) {
+    program.outputHelp();
+    process.exit(0);
+  }
+
+  // Check what kind of args we have
+  const commands = ["search", "subdomains", "cert"];
+  const hasHelp = rawArgs.includes("--help") || rawArgs.includes("-h");
+  const hasVersion = rawArgs.includes("--version") || rawArgs.includes("-V");
+  const firstNonFlag = rawArgs.find(a => !a.startsWith("-"));
+
+  if (!firstNonFlag && !hasHelp && !hasVersion) {
+    // Flags-only (no command) → help + exit 1
     program.outputHelp();
     process.exit(1);
-  });
+  }
+
+  if (firstNonFlag && !commands.includes(firstNonFlag) && !hasHelp) {
+    // Unknown command
+    console.error(
+      formatError(
+        `Unknown command: ${firstNonFlag}. Run 'crt --help' for usage.`,
+        "UNKNOWN_COMMAND"
+      )
+    );
+    process.exit(1);
+  }
 
   try {
     await program.parseAsync(rawArgs, { from: "user" });
@@ -284,6 +265,7 @@ async function main() {
           process.exit(1);
           break;
         case "commander.helpDisplayed":
+        case "commander.version":
           process.exit(0);
           break;
         default:
