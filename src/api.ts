@@ -26,35 +26,57 @@ export function buildUrl(
   return `https://crt.sh/?${params.toString()}`;
 }
 
+export const MAX_RETRIES = 3;
+
+export async function fetchWithRetry(
+  url: string,
+  options: { baseDelay: number; fetchFn: typeof fetch }
+): Promise<Response> {
+  let lastError: CrtShError | undefined;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      await new Promise(r => setTimeout(r, options.baseDelay * 2 ** (attempt - 1)));
+    }
+
+    let response: Response;
+    try {
+      response = await options.fetchFn(url, { signal: AbortSignal.timeout(30_000) });
+    } catch (err) {
+      lastError = new CrtShError(
+        `Network error: ${err instanceof Error ? err.message : String(err)}`,
+        "NETWORK_ERROR"
+      );
+      continue;
+    }
+
+    if (response.status === 502) {
+      lastError = new CrtShError(
+        "crt.sh returned 502 (server error or rate limit)",
+        "SERVER_ERROR"
+      );
+      continue;
+    }
+
+    if (!response.ok) {
+      throw new CrtShError(
+        `crt.sh returned HTTP ${response.status}`,
+        "HTTP_ERROR"
+      );
+    }
+
+    return response;
+  }
+
+  throw lastError!;
+}
+
 export async function searchCertificates(
   query: string,
   options?: { wildcard?: boolean; excludeExpired?: boolean }
 ): Promise<CrtShEntry[]> {
   const url = buildUrl(query, options);
 
-  let response: Response;
-  try {
-    response = await fetch(url, { signal: AbortSignal.timeout(30_000) });
-  } catch (err) {
-    throw new CrtShError(
-      `Network error: ${err instanceof Error ? err.message : String(err)}`,
-      "NETWORK_ERROR"
-    );
-  }
-
-  if (response.status === 502) {
-    throw new CrtShError(
-      "crt.sh returned 502 (server error or rate limit)",
-      "SERVER_ERROR"
-    );
-  }
-
-  if (!response.ok) {
-    throw new CrtShError(
-      `crt.sh returned HTTP ${response.status}`,
-      "HTTP_ERROR"
-    );
-  }
+  const response = await fetchWithRetry(url, { baseDelay: 1000, fetchFn: fetch });
 
   let text: string;
   try {

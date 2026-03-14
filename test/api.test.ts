@@ -56,3 +56,4 @@ describe("buildUrl", () => {
     expect(params.get("output")).toBe("json");
   });
 });
+

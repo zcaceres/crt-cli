@@ -15,6 +15,15 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun test
 
+  integration:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: INTEGRATION=1 bun test test/integration.test.ts
+
   release:
     needs: test
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -28,8 +37,20 @@ jobs:
 
       - name: Build binaries
         run: |
-          bun build --compile src/index.ts --outfile crt-linux-x64
-          bun build --compile src/mcp.ts --outfile crt-mcp-linux-x64
+          for target in bun-linux-x64 bun-linux-arm64 bun-darwin-x64 bun-darwin-arm64 bun-windows-x64; do
+            platform="${target#bun-}"
+            ext=""; [[ "$platform" == "windows-x64" ]] && ext=".exe"
+            bun build --compile --target=$target src/index.ts --outfile "crt-${platform}${ext}"
+            bun build --compile --target=$target src/mcp.ts --outfile "crt-mcp-${platform}${ext}"
+          done
+
+      - name: Verify binaries
+        run: |
+          for f in crt-*; do
+            size=$(stat -c%s "$f")
+            echo "$f: $size bytes"
+            [ "$size" -lt 1000 ] && echo "ERROR: $f too small" && exit 1
+          done
 
       - name: Get version
         id: version
@@ -52,4 +73,12 @@ jobs:
           generate_release_notes: true
           files: |
             crt-linux-x64
+            crt-linux-arm64
+            crt-darwin-x64
+            crt-darwin-arm64
+            crt-windows-x64.exe
             crt-mcp-linux-x64
+            crt-mcp-linux-arm64
+            crt-mcp-darwin-x64
+            crt-mcp-darwin-arm64
+            crt-mcp-windows-x64.exe

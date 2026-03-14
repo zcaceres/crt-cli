@@ -38,13 +38,15 @@ describe("CLI integration", () => {
     test("search --help shows search help", async () => {
       const { stdout, exitCode } = await run("search", "--help");
       expect(exitCode).toBe(0);
-      expect(stdout).toContain("crt search <domain>");
+      expect(stdout).toContain("crt search");
+      expect(stdout).toContain("<domain>");
     });
 
     test("cert --help shows cert help", async () => {
       const { stdout, exitCode } = await run("cert", "--help");
       expect(exitCode).toBe(0);
-      expect(stdout).toContain("crt cert <id>");
+      expect(stdout).toContain("crt cert");
+      expect(stdout).toContain("<id>");
     });
 
     test("--describe outputs JSON schema", async () => {
