@@ -34,7 +34,7 @@ export async function searchCertificates(
 
   let response: Response;
   try {
-    response = await fetch(url);
+    response = await fetch(url, { signal: AbortSignal.timeout(30_000) });
   } catch (err) {
     throw new CrtShError(
       `Network error: ${err instanceof Error ? err.message : String(err)}`,
@@ -56,7 +56,15 @@ export async function searchCertificates(
     );
   }
 
-  const text = await response.text();
+  let text: string;
+  try {
+    text = await response.text();
+  } catch (err) {
+    throw new CrtShError(
+      `Network error reading response: ${err instanceof Error ? err.message : String(err)}`,
+      "NETWORK_ERROR"
+    );
+  }
   if (!text.trim() || text.trim() === "[]") {
     return [];
   }

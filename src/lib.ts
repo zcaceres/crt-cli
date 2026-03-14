@@ -2,3 +2,4 @@ export { searchCertificates, dedupeBySerial, extractSubdomains, buildUrl, CrtShE
 export { formatJson, formatTable, formatSubdomains, formatError } from "./format";
 export { CrtShEntrySchema, CrtShResponseSchema } from "./schemas";
 export type { CrtShEntry, CrtShResponse } from "./schemas";
+export { createServer } from "./mcp";

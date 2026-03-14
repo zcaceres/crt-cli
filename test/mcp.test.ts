@@ -2,127 +2,37 @@ import { describe, expect, test, mock, beforeAll, afterAll } from "bun:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
 import fixture from "../fixtures/example-com.json";
 import type { CrtShEntry } from "../src/schemas";
+import { CrtShError } from "../src/api";
 
-// We need to mock fetch before importing the MCP server code so that
-// searchCertificates doesn't hit the network. We'll build the server
-// inline using the same tool registrations as src/mcp.ts but importing
-// the underlying functions directly.
-import {
-  dedupeBySerial,
-  extractSubdomains,
-  validateCertId,
-  CrtShError,
-} from "../src/api";
-import { formatJson, formatTable, formatSubdomains } from "../src/format";
-
-// Mock searchCertificates to avoid network calls
+// Mock searchCertificates at the module level so createServer picks it up
 const mockSearchCertificates = mock<(query: string, options?: { wildcard?: boolean; excludeExpired?: boolean }) => Promise<CrtShEntry[]>>();
 
-function createTestServer() {
-  const server = new McpServer({ name: "crt-sh", version: "1.0.0" });
+mock.module("../src/api", () => {
+  const actual = require("../src/api");
+  return {
+    ...actual,
+    searchCertificates: mockSearchCertificates,
+  };
+});
 
-  server.tool(
-    "search_certificates",
-    "Search Certificate Transparency logs for certificates matching a domain",
-    {
-      domain: z.string().describe("Domain to search for"),
-      wildcard: z.boolean().optional().default(false).describe("Prefix query with %. for subdomain search"),
-      excludeExpired: z.boolean().optional().default(false).describe("Exclude expired certificates"),
-      dedupe: z.boolean().optional().default(false).describe("Deduplicate results by serial number"),
-      format: z.enum(["json", "table", "subdomains"]).optional().default("json").describe("Output format"),
-    },
-    async ({ domain, wildcard, excludeExpired, dedupe, format }) => {
-      try {
-        let results = await mockSearchCertificates(domain, { wildcard, excludeExpired });
-        if (dedupe) {
-          results = dedupeBySerial(results);
-        }
-        let text: string;
-        switch (format) {
-          case "table":
-            text = formatTable(results);
-            break;
-          case "subdomains":
-            text = formatSubdomains(extractSubdomains(results));
-            break;
-          default:
-            text = formatJson(results);
-        }
-        return { content: [{ type: "text" as const, text }] };
-      } catch (err) {
-        if (err instanceof CrtShError) {
-          return { content: [{ type: "text" as const, text: `Error [${err.code}]: ${err.message}` }], isError: true };
-        }
-        throw err;
-      }
-    }
-  );
-
-  server.tool(
-    "find_subdomains",
-    "Find unique subdomains for a domain via Certificate Transparency logs",
-    {
-      domain: z.string().describe("Domain to find subdomains for"),
-      excludeExpired: z.boolean().optional().default(false).describe("Exclude expired certificates"),
-    },
-    async ({ domain, excludeExpired }) => {
-      try {
-        const results = await mockSearchCertificates(domain, { wildcard: true, excludeExpired });
-        const text = formatSubdomains(extractSubdomains(results));
-        return { content: [{ type: "text" as const, text }] };
-      } catch (err) {
-        if (err instanceof CrtShError) {
-          return { content: [{ type: "text" as const, text: `Error [${err.code}]: ${err.message}` }], isError: true };
-        }
-        throw err;
-      }
-    }
-  );
-
-  server.tool(
-    "lookup_cert",
-    "Look up a specific certificate by its crt.sh ID",
-    {
-      id: z.string().describe("Certificate ID on crt.sh"),
-    },
-    async ({ id }) => {
-      const validation = validateCertId(id);
-      if (!validation.valid) {
-        return { content: [{ type: "text" as const, text: `Error [INVALID_ARG]: ${validation.reason}` }], isError: true };
-      }
-      const text = JSON.stringify(
-        {
-          id: validation.certId,
-          url: `https://crt.sh/?id=${validation.certId}`,
-          note: "crt.sh does not provide a JSON API for individual certificates. Visit the URL for full details.",
-        },
-        null,
-        2
-      );
-      return { content: [{ type: "text" as const, text }] };
-    }
-  );
-
-  return server;
-}
+const { createServer } = await import("../src/mcp");
 
 let client: Client;
 let server: McpServer;
 
+// Initialize client before connecting
+client = new Client({ name: "test-client", version: "1.0.0" });
+
 beforeAll(async () => {
-  server = createTestServer();
+  server = createServer();
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await Promise.all([
     client.connect(clientTransport),
     server.connect(serverTransport),
   ]);
 });
-
-// Initialize client before connecting
-client = new Client({ name: "test-client", version: "1.0.0" });
 
 afterAll(async () => {
   await client.close();
