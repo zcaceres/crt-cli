@@ -7,10 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-03-15
+
 ### Added
 - Domain input validation — rejects obviously invalid domains (missing dots, invalid characters, too long) with `INVALID_DOMAIN` error code
 - MCP `search_certificates` tool now accepts optional `domains` array for multi-domain search
 - CHANGELOG.md for structured release tracking
+- Fixture-based integration tests for CSV and multi-domain pipelines
 
 ### Changed
 - Unified format dispatch in CLI — eliminated duplicated switch blocks for single/multi-domain formatting
