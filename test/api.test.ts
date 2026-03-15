@@ -1,5 +1,22 @@
-import { describe, expect, test } from "bun:test";
-import { buildUrl } from "../src/api";
+import { describe, expect, mock, test } from "bun:test";
+import { buildUrl, CrtShError, searchMultipleDomains } from "../src/api";
+import type { CrtShEntry } from "../src/schemas";
+
+function makeEntry(overrides: Partial<CrtShEntry> = {}): CrtShEntry {
+  return {
+    issuer_ca_id: 1,
+    issuer_name: "Test CA",
+    common_name: "example.com",
+    name_value: "example.com",
+    id: 1,
+    entry_timestamp: null,
+    not_before: "2024-01-01",
+    not_after: "2025-01-01",
+    serial_number: "abc123",
+    result_count: 1,
+    ...overrides,
+  };
+}
 
 describe("buildUrl", () => {
   test("builds basic query URL", () => {
@@ -57,5 +74,58 @@ describe("buildUrl", () => {
     const url = buildUrl("anything");
     const params = new URL(url).searchParams;
     expect(params.get("output")).toBe("json");
+  });
+});
+
+describe("searchMultipleDomains", () => {
+  test("returns results for multiple domains", async () => {
+    const entry1 = makeEntry({ common_name: "a.com", id: 1 });
+    const entry2 = makeEntry({ common_name: "b.com", id: 2 });
+
+    const mockSearch = mock(async (query: string) => {
+      if (query === "a.com") return [entry1];
+      return [entry2];
+    }) as typeof import("../src/api").searchCertificates;
+
+    const { results, errors } = await searchMultipleDomains(
+      ["a.com", "b.com"],
+      {
+        delayMs: 0,
+        searchFn: mockSearch,
+      },
+    );
+
+    expect(results.size).toBe(2);
+    expect(results.get("a.com")).toHaveLength(1);
+    expect(results.get("b.com")).toHaveLength(1);
+    expect(errors.size).toBe(0);
+  });
+
+  test("handles partial failure", async () => {
+    const entry1 = makeEntry({ common_name: "a.com" });
+
+    const mockSearch = mock(async (query: string) => {
+      if (query === "a.com") return [entry1];
+      throw new CrtShError("server error", "SERVER_ERROR");
+    }) as typeof import("../src/api").searchCertificates;
+
+    const { results, errors } = await searchMultipleDomains(
+      ["a.com", "b.com"],
+      {
+        delayMs: 0,
+        searchFn: mockSearch,
+      },
+    );
+
+    expect(results.size).toBe(1);
+    expect(results.has("a.com")).toBe(true);
+    expect(errors.size).toBe(1);
+    expect(errors.has("b.com")).toBe(true);
+  });
+
+  test("returns empty maps for empty domain array", async () => {
+    const { results, errors } = await searchMultipleDomains([]);
+    expect(results.size).toBe(0);
+    expect(errors.size).toBe(0);
   });
 });

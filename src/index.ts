@@ -7,11 +7,15 @@ import {
   dedupeBySerial,
   extractSubdomains,
   searchCertificates,
+  searchMultipleDomains,
   validateCertId,
 } from "./api";
 import {
+  formatCsv,
   formatError,
   formatJson,
+  formatMultiDomainJson,
+  formatMultiDomainResults,
   formatSubdomains,
   formatTable,
 } from "./format";
@@ -23,14 +27,14 @@ const DESCRIBE_OUTPUT = {
   commands: [
     {
       name: "search",
-      description: "Search certificates for a domain in CT logs",
-      usage: "crt search <domain>",
+      description: "Search certificates for one or more domains in CT logs",
+      usage: "crt search <domains...>",
       args: [
         {
-          name: "domain",
-          type: "string",
+          name: "domains",
+          type: "string[]",
           required: true,
-          description: "Domain to search for",
+          description: "One or more domains to search for",
         },
       ],
       flags: [
@@ -53,7 +57,7 @@ const DESCRIBE_OUTPUT = {
           alias: "-f",
           type: "string",
           default: "json",
-          description: "Output format: json, table, or subdomains",
+          description: "Output format: json, table, csv, or subdomains",
         },
         {
           name: "--dedupe",
@@ -65,8 +69,9 @@ const DESCRIBE_OUTPUT = {
       ],
       examples: [
         "crt search example.com",
+        "crt search example.com example.org",
         "crt search example.com -w -e -d",
-        "crt search example.com --format table",
+        "crt search example.com --format csv",
       ],
     },
     {
@@ -131,8 +136,8 @@ function buildProgram() {
 
   program
     .command("search")
-    .description("Search certificates for a domain in CT logs")
-    .argument("<domain>", "Domain to search for")
+    .description("Search certificates for one or more domains in CT logs")
+    .argument("<domains...>", "One or more domains to search for")
     .option(
       "-w, --wildcard",
       "Prefix query with %. for subdomain search",
@@ -141,13 +146,13 @@ function buildProgram() {
     .option("-e, --exclude-expired", "Exclude expired certificates", false)
     .option(
       "-f, --format <format>",
-      "Output format: json (default), table, subdomains",
+      "Output format: json (default), table, csv, subdomains",
       "json",
     )
     .option("-d, --dedupe", "Deduplicate results by serial number", false)
     .action(
       async (
-        domain: string,
+        domains: string[],
         opts: {
           wildcard: boolean;
           excludeExpired: boolean;
@@ -155,11 +160,11 @@ function buildProgram() {
           dedupe: boolean;
         },
       ) => {
-        const validFormats = ["json", "table", "subdomains"];
+        const validFormats = ["json", "table", "csv", "subdomains"];
         if (opts.format.startsWith("-")) {
           console.error(
             formatError(
-              "--format requires a value (json, table, subdomains)",
+              "--format requires a value (json, table, csv, subdomains)",
               "MISSING_VALUE",
             ),
           );
@@ -172,25 +177,62 @@ function buildProgram() {
           process.exit(1);
         }
 
-        let results = await searchCertificates(domain, {
-          wildcard: opts.wildcard,
-          excludeExpired: opts.excludeExpired,
-        });
+        if (domains.length === 1) {
+          let results = await searchCertificates(domains[0], {
+            wildcard: opts.wildcard,
+            excludeExpired: opts.excludeExpired,
+          });
 
-        if (opts.dedupe) {
-          results = dedupeBySerial(results);
-        }
+          if (opts.dedupe) {
+            results = dedupeBySerial(results);
+          }
 
-        switch (opts.format) {
-          case "json":
-            console.log(formatJson(results));
-            break;
-          case "table":
-            console.log(formatTable(results));
-            break;
-          case "subdomains":
-            console.log(formatSubdomains(extractSubdomains(results)));
-            break;
+          switch (opts.format) {
+            case "json":
+              console.log(formatJson(results));
+              break;
+            case "table":
+              console.log(formatTable(results));
+              break;
+            case "csv":
+              console.log(formatCsv(results));
+              break;
+            case "subdomains":
+              console.log(formatSubdomains(extractSubdomains(results)));
+              break;
+          }
+        } else {
+          const { results, errors } = await searchMultipleDomains(domains, {
+            wildcard: opts.wildcard,
+            excludeExpired: opts.excludeExpired,
+          });
+
+          if (opts.dedupe) {
+            for (const [domain, entries] of results) {
+              results.set(domain, dedupeBySerial(entries));
+            }
+          }
+
+          switch (opts.format) {
+            case "json":
+              console.log(formatMultiDomainJson(results, errors));
+              break;
+            case "table":
+              console.log(
+                formatMultiDomainResults(results, errors, formatTable),
+              );
+              break;
+            case "csv":
+              console.log(formatMultiDomainResults(results, errors, formatCsv));
+              break;
+            case "subdomains":
+              console.log(
+                formatMultiDomainResults(results, errors, (entries) =>
+                  formatSubdomains(extractSubdomains(entries)),
+                ),
+              );
+              break;
+          }
         }
       },
     );

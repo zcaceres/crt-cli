@@ -40,7 +40,7 @@ describe("CLI integration", () => {
       const { stdout, exitCode } = await run("search", "--help");
       expect(exitCode).toBe(0);
       expect(stdout).toContain("crt search");
-      expect(stdout).toContain("<domain>");
+      expect(stdout).toContain("<domains...>");
     });
 
     test("cert --help shows cert help", async () => {
@@ -202,6 +202,14 @@ describe("CLI integration", () => {
       expect(exitCode).toBe(1);
       const parsed = JSON.parse(stderr);
       expect(parsed.code).toBe("MISSING_ARG");
+    });
+  });
+
+  describe("multi-domain search", () => {
+    test("search --help mentions domains...", async () => {
+      const { stdout, exitCode } = await run("search", "--help");
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("domains");
     });
   });
 });

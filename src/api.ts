@@ -174,6 +174,57 @@ export function validateCertId(
   return { valid: true, certId };
 }
 
+export interface MultiDomainResult {
+  results: Map<string, CrtShEntry[]>;
+  errors: Map<string, CrtShError>;
+}
+
+/**
+ * Search multiple domains sequentially with a delay between requests.
+ * Collects successes and failures separately.
+ */
+export async function searchMultipleDomains(
+  domains: string[],
+  options?: {
+    wildcard?: boolean;
+    excludeExpired?: boolean;
+    delayMs?: number;
+    searchFn?: typeof searchCertificates;
+  },
+): Promise<MultiDomainResult> {
+  const results = new Map<string, CrtShEntry[]>();
+  const errors = new Map<string, CrtShError>();
+  const delayMs = options?.delayMs ?? 1500;
+  const search = options?.searchFn ?? searchCertificates;
+
+  for (let i = 0; i < domains.length; i++) {
+    if (i > 0 && delayMs > 0) {
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+    try {
+      const entries = await search(domains[i], {
+        wildcard: options?.wildcard,
+        excludeExpired: options?.excludeExpired,
+      });
+      results.set(domains[i], entries);
+    } catch (err) {
+      if (err instanceof CrtShError) {
+        errors.set(domains[i], err);
+      } else {
+        errors.set(
+          domains[i],
+          new CrtShError(
+            err instanceof Error ? err.message : String(err),
+            "UNKNOWN_ERROR",
+          ),
+        );
+      }
+    }
+  }
+
+  return { results, errors };
+}
+
 /**
  * Extract unique subdomains from certificate `name_value` fields.
  * @param entries - Certificate entries to extract subdomains from.
