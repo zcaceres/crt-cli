@@ -11,7 +11,7 @@ import {
   searchCertificates,
   validateCertId,
 } from "./api";
-import { formatJson, formatSubdomains, formatTable } from "./format";
+import { formatCsv, formatJson, formatSubdomains, formatTable } from "./format";
 
 /** Create an MCP server with tools for searching CT logs, finding subdomains, and looking up certificates. */
 export function createServer() {
@@ -41,7 +41,7 @@ export function createServer() {
         .default(false)
         .describe("Deduplicate results by serial number"),
       format: z
-        .enum(["json", "table", "subdomains"])
+        .enum(["json", "table", "csv", "subdomains"])
         .optional()
         .default("json")
         .describe("Output format"),
@@ -59,6 +59,9 @@ export function createServer() {
         switch (format) {
           case "table":
             text = formatTable(results);
+            break;
+          case "csv":
+            text = formatCsv(results);
             break;
           case "subdomains":
             text = formatSubdomains(extractSubdomains(results));
