@@ -9,6 +9,7 @@ import {
   searchCertificates,
   searchMultipleDomains,
   validateCertId,
+  validateDomain,
 } from "./api";
 import {
   formatCsv,
@@ -19,6 +20,7 @@ import {
   formatSubdomains,
   formatTable,
 } from "./format";
+import type { CrtShEntry } from "./schemas";
 
 const DESCRIBE_OUTPUT = {
   name: "crt-cli",
@@ -121,6 +123,20 @@ const DESCRIBE_OUTPUT = {
   },
 };
 
+/** Return the per-entry formatter for the given format name. */
+function getEntryFormatter(format: string): (entries: CrtShEntry[]) => string {
+  switch (format) {
+    case "table":
+      return formatTable;
+    case "csv":
+      return formatCsv;
+    case "subdomains":
+      return (entries) => formatSubdomains(extractSubdomains(entries));
+    default:
+      return formatJson;
+  }
+}
+
 function buildProgram() {
   const program = new Command()
     .name("crt")
@@ -177,6 +193,16 @@ function buildProgram() {
           process.exit(1);
         }
 
+        for (const d of domains) {
+          const domainCheck = validateDomain(d);
+          if (!domainCheck.valid) {
+            console.error(formatError(domainCheck.reason, "INVALID_DOMAIN"));
+            process.exit(1);
+          }
+        }
+
+        const fmt = getEntryFormatter(opts.format);
+
         if (domains.length === 1) {
           let results = await searchCertificates(domains[0], {
             wildcard: opts.wildcard,
@@ -187,20 +213,7 @@ function buildProgram() {
             results = dedupeBySerial(results);
           }
 
-          switch (opts.format) {
-            case "json":
-              console.log(formatJson(results));
-              break;
-            case "table":
-              console.log(formatTable(results));
-              break;
-            case "csv":
-              console.log(formatCsv(results));
-              break;
-            case "subdomains":
-              console.log(formatSubdomains(extractSubdomains(results)));
-              break;
-          }
+          console.log(fmt(results));
         } else {
           const { results, errors } = await searchMultipleDomains(domains, {
             wildcard: opts.wildcard,
@@ -213,25 +226,10 @@ function buildProgram() {
             }
           }
 
-          switch (opts.format) {
-            case "json":
-              console.log(formatMultiDomainJson(results, errors));
-              break;
-            case "table":
-              console.log(
-                formatMultiDomainResults(results, errors, formatTable),
-              );
-              break;
-            case "csv":
-              console.log(formatMultiDomainResults(results, errors, formatCsv));
-              break;
-            case "subdomains":
-              console.log(
-                formatMultiDomainResults(results, errors, (entries) =>
-                  formatSubdomains(extractSubdomains(entries)),
-                ),
-              );
-              break;
+          if (opts.format === "json") {
+            console.log(formatMultiDomainJson(results, errors));
+          } else {
+            console.log(formatMultiDomainResults(results, errors, fmt));
           }
         }
       },
@@ -243,6 +241,11 @@ function buildProgram() {
     .argument("<domain>", "Domain to find subdomains for")
     .option("-e, --exclude-expired", "Exclude expired certificates", false)
     .action(async (domain: string, opts: { excludeExpired: boolean }) => {
+      const domainCheck = validateDomain(domain);
+      if (!domainCheck.valid) {
+        console.error(formatError(domainCheck.reason, "INVALID_DOMAIN"));
+        process.exit(1);
+      }
       const results = await searchCertificates(domain, {
         wildcard: true,
         excludeExpired: opts.excludeExpired,

@@ -7,6 +7,7 @@ export {
   searchCertificates,
   searchMultipleDomains,
   validateCertId,
+  validateDomain,
 } from "./api";
 export {
   formatCsv,

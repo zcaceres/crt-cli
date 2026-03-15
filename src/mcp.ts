@@ -9,9 +9,18 @@ import {
   dedupeBySerial,
   extractSubdomains,
   searchCertificates,
+  searchMultipleDomains,
   validateCertId,
+  validateDomain,
 } from "./api";
-import { formatCsv, formatJson, formatSubdomains, formatTable } from "./format";
+import {
+  formatCsv,
+  formatJson,
+  formatMultiDomainJson,
+  formatMultiDomainResults,
+  formatSubdomains,
+  formatTable,
+} from "./format";
 
 /** Create an MCP server with tools for searching CT logs, finding subdomains, and looking up certificates. */
 export function createServer() {
@@ -22,9 +31,20 @@ export function createServer() {
 
   server.tool(
     "search_certificates",
-    "Search Certificate Transparency logs for certificates matching a domain",
+    "Search Certificate Transparency logs for certificates matching one or more domains. Use 'domain' for single-domain search or 'domains' for multi-domain grouped results.",
     {
-      domain: z.string().min(1).describe("Domain to search for"),
+      domain: z
+        .string()
+        .min(1)
+        .describe("Domain to search for (single-domain mode)")
+        .optional(),
+      domains: z
+        .array(z.string().min(1))
+        .min(1)
+        .describe(
+          "Multiple domains to search (multi-domain mode, returns grouped results)",
+        )
+        .optional(),
       wildcard: z
         .boolean()
         .optional()
@@ -46,29 +66,81 @@ export function createServer() {
         .default("json")
         .describe("Output format"),
     },
-    async ({ domain, wildcard, excludeExpired, dedupe, format }) => {
+    async ({ domain, domains, wildcard, excludeExpired, dedupe, format }) => {
+      if (!domain && !domains) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: 'Error [MISSING_ARG]: Either "domain" or "domains" is required',
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      const domainsToValidate = domains ?? [domain!];
+      for (const d of domainsToValidate) {
+        const check = validateDomain(d);
+        if (!check.valid) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `Error [INVALID_DOMAIN]: ${check.reason}`,
+              },
+            ],
+            isError: true,
+          };
+        }
+      }
+
+      const getFormatter = () => {
+        switch (format) {
+          case "table":
+            return formatTable;
+          case "csv":
+            return formatCsv;
+          case "subdomains":
+            return (entries: import("./schemas").CrtShEntry[]) =>
+              formatSubdomains(extractSubdomains(entries));
+          default:
+            return formatJson;
+        }
+      };
+
       try {
-        let results = await searchCertificates(domain, {
+        // Multi-domain mode
+        if (domains) {
+          const { results, errors } = await searchMultipleDomains(domains, {
+            wildcard,
+            excludeExpired,
+          });
+
+          if (dedupe) {
+            for (const [d, entries] of results) {
+              results.set(d, dedupeBySerial(entries));
+            }
+          }
+
+          let text: string;
+          if (format === "json") {
+            text = formatMultiDomainJson(results, errors);
+          } else {
+            text = formatMultiDomainResults(results, errors, getFormatter());
+          }
+          return { content: [{ type: "text" as const, text }] };
+        }
+
+        // Single-domain mode
+        let results = await searchCertificates(domain!, {
           wildcard,
           excludeExpired,
         });
         if (dedupe) {
           results = dedupeBySerial(results);
         }
-        let text: string;
-        switch (format) {
-          case "table":
-            text = formatTable(results);
-            break;
-          case "csv":
-            text = formatCsv(results);
-            break;
-          case "subdomains":
-            text = formatSubdomains(extractSubdomains(results));
-            break;
-          default:
-            text = formatJson(results);
-        }
+        const text = getFormatter()(results);
         return { content: [{ type: "text" as const, text }] };
       } catch (err) {
         if (err instanceof CrtShError) {

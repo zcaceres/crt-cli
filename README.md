@@ -22,8 +22,9 @@ crt <command> [args] [flags]
 
 ```bash
 crt search example.com
+crt search example.com example.org
 crt search example.com -w -e -d
-crt search example.com --format table
+crt search example.com --format csv
 ```
 
 | Flag | Alias | Description |
@@ -31,7 +32,7 @@ crt search example.com --format table
 | `--wildcard` | `-w` | Prefix query with `%.` for subdomain search |
 | `--exclude-expired` | `-e` | Exclude expired certificates |
 | `--dedupe` | `-d` | Deduplicate results by serial number |
-| `--format <fmt>` | `-f` | Output format: `json` (default), `table`, `subdomains` |
+| `--format <fmt>` | `-f` | Output format: `json` (default), `table`, `csv`, `subdomains` |
 
 **subdomains** — Find unique subdomains for a domain. Shortcut for `search -w --format subdomains`.
 
@@ -74,7 +75,7 @@ bun run src/mcp.ts
 
 | Tool | Description |
 |------|-------------|
-| `search_certificates` | Search CT logs. Accepts `domain`, `wildcard`, `excludeExpired`, `dedupe`, `format`. |
+| `search_certificates` | Search CT logs. Accepts `domain` or `domains` (array), `wildcard`, `excludeExpired`, `dedupe`, `format`. |
 | `find_subdomains` | Find unique subdomains for a domain (wildcard search). |
 | `lookup_cert` | Look up a certificate by crt.sh ID. |
 
@@ -134,11 +135,17 @@ const server = createServer();
 | `extractSubdomains` | function | Extract sorted unique subdomains from entries |
 | `buildUrl` | function | Build a crt.sh query URL |
 | `validateCertId` | function | Validate a certificate ID string |
-| `CrtShError` | class | Error class with code (`NETWORK_ERROR`, `SERVER_ERROR`, `HTTP_ERROR`, `PARSE_ERROR`, `VALIDATION_ERROR`, `INVALID_ARG`) |
+| `validateDomain` | function | Validate a domain string (rejects invalid characters, missing dots, etc.) |
+| `CrtShError` | class | Error class with code (`NETWORK_ERROR`, `SERVER_ERROR`, `HTTP_ERROR`, `PARSE_ERROR`, `VALIDATION_ERROR`, `INVALID_ARG`, `INVALID_DOMAIN`) |
 | `formatJson` | function | Format entries as pretty-printed JSON |
 | `formatTable` | function | Format entries as an ASCII table |
+| `formatCsv` | function | Format entries as RFC 4180 CSV |
 | `formatSubdomains` | function | Format subdomains as a newline-separated list |
+| `formatMultiDomainJson` | function | Format multi-domain results as grouped JSON |
+| `formatMultiDomainResults` | function | Format multi-domain results with domain headers |
 | `formatError` | function | Format an error as JSON |
+| `searchMultipleDomains` | function | Search multiple domains with sequential delay |
+| `MultiDomainResult` | type | Result type for multi-domain search |
 | `createServer` | function | Create an MCP server instance |
 | `CrtShEntrySchema` | Zod schema | Schema for a single crt.sh entry |
 | `CrtShResponseSchema` | Zod schema | Schema for an array of entries |
@@ -151,7 +158,7 @@ const server = createServer();
 bun test
 ```
 
-108 tests across 9 files covering the CLI, API, formatters, argument parsing, schema validation, library exports, and MCP server.
+150+ tests across 11 files covering the CLI, API, formatters, argument parsing, schema validation, library exports, MCP server, CSV integration, and multi-domain pipelines.
 
 ## Linting
 
