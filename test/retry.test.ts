@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { fetchWithRetry, CrtShError } from "../src/api";
+import { CrtShError, fetchWithRetry } from "../src/api";
 
 describe("fetchWithRetry", () => {
   test("retries on 502 up to 3 times, then throws SERVER_ERROR", async () => {
@@ -10,7 +10,10 @@ describe("fetchWithRetry", () => {
     }) as typeof fetch;
 
     try {
-      await fetchWithRetry("https://crt.sh/?q=test&output=json", { baseDelay: 0, fetchFn });
+      await fetchWithRetry("https://crt.sh/?q=test&output=json", {
+        baseDelay: 0,
+        fetchFn,
+      });
       throw new Error("should not reach here");
     } catch (err) {
       expect(err).toBeInstanceOf(CrtShError);
@@ -27,7 +30,10 @@ describe("fetchWithRetry", () => {
     }) as typeof fetch;
 
     try {
-      await fetchWithRetry("https://crt.sh/?q=test&output=json", { baseDelay: 0, fetchFn });
+      await fetchWithRetry("https://crt.sh/?q=test&output=json", {
+        baseDelay: 0,
+        fetchFn,
+      });
       throw new Error("should not reach here");
     } catch (err) {
       expect(err).toBeInstanceOf(CrtShError);
@@ -46,7 +52,10 @@ describe("fetchWithRetry", () => {
       return new Response("OK", { status: 200 });
     }) as typeof fetch;
 
-    const response = await fetchWithRetry("https://crt.sh/?q=test&output=json", { baseDelay: 0, fetchFn });
+    const response = await fetchWithRetry(
+      "https://crt.sh/?q=test&output=json",
+      { baseDelay: 0, fetchFn },
+    );
     expect(response.status).toBe(200);
     expect(callCount).toBe(2);
   });
@@ -59,7 +68,10 @@ describe("fetchWithRetry", () => {
     }) as typeof fetch;
 
     try {
-      await fetchWithRetry("https://crt.sh/?q=test&output=json", { baseDelay: 0, fetchFn });
+      await fetchWithRetry("https://crt.sh/?q=test&output=json", {
+        baseDelay: 0,
+        fetchFn,
+      });
       throw new Error("should not reach here");
     } catch (err) {
       expect(err).toBeInstanceOf(CrtShError);

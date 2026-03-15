@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { $ } from "bun";
 
-async function run(...args: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+async function run(
+  ...args: string[]
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const proc = Bun.spawn(["bun", "run", "src/index.ts", ...args], {
     stdout: "pipe",
     stderr: "pipe",
@@ -151,7 +152,11 @@ describe("CLI integration", () => {
 
   describe("unknown flags", () => {
     test("unknown flag shows error", async () => {
-      const { stderr, exitCode } = await run("search", "example.com", "--bogus");
+      const { stderr, exitCode } = await run(
+        "search",
+        "example.com",
+        "--bogus",
+      );
       expect(exitCode).toBe(1);
       const parsed = JSON.parse(stderr);
       expect(parsed.code).toBe("UNKNOWN_FLAG");
@@ -161,14 +166,23 @@ describe("CLI integration", () => {
 
   describe("--format missing value", () => {
     test("--format without value shows MISSING_VALUE error", async () => {
-      const { stderr, exitCode } = await run("search", "example.com", "--format");
+      const { stderr, exitCode } = await run(
+        "search",
+        "example.com",
+        "--format",
+      );
       expect(exitCode).toBe(1);
       const parsed = JSON.parse(stderr);
       expect(parsed.code).toBe("MISSING_VALUE");
     });
 
     test("--format followed by another flag shows MISSING_VALUE error", async () => {
-      const { stderr, exitCode } = await run("search", "example.com", "--format", "-w");
+      const { stderr, exitCode } = await run(
+        "search",
+        "example.com",
+        "--format",
+        "-w",
+      );
       expect(exitCode).toBe(1);
       const parsed = JSON.parse(stderr);
       expect(parsed.code).toBe("MISSING_VALUE");

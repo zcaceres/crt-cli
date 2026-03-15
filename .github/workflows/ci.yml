@@ -7,6 +7,14 @@ on:
     branches: [main]
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -25,7 +33,7 @@ jobs:
       - run: INTEGRATION=1 bun test test/integration.test.ts
 
   release:
-    needs: test
+    needs: [lint, test]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
