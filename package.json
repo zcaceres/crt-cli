@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
-    "commander": "^13",
+    "commander": "^14",
     "zod": "^4"
   },
   "devDependencies": {
