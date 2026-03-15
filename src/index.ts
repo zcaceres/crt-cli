@@ -1,15 +1,20 @@
 #!/usr/bin/env bun
 
 import { Command, CommanderError } from "commander";
+import pkg from "../package.json";
 import {
-  searchCertificates,
+  CrtShError,
   dedupeBySerial,
   extractSubdomains,
-  CrtShError,
+  searchCertificates,
   validateCertId,
 } from "./api";
-import { formatJson, formatTable, formatSubdomains, formatError } from "./format";
-import pkg from "../package.json";
+import {
+  formatError,
+  formatJson,
+  formatSubdomains,
+  formatTable,
+} from "./format";
 
 const DESCRIBE_OUTPUT = {
   name: "crt-cli",
@@ -114,7 +119,9 @@ const DESCRIBE_OUTPUT = {
 function buildProgram() {
   const program = new Command()
     .name("crt")
-    .description("Agent-friendly CLI for crt.sh Certificate Transparency log search")
+    .description(
+      "Agent-friendly CLI for crt.sh Certificate Transparency log search",
+    )
     .version(pkg.version, "-V, --version")
     .exitOverride()
     .configureOutput({
@@ -126,42 +133,67 @@ function buildProgram() {
     .command("search")
     .description("Search certificates for a domain in CT logs")
     .argument("<domain>", "Domain to search for")
-    .option("-w, --wildcard", "Prefix query with %. for subdomain search", false)
+    .option(
+      "-w, --wildcard",
+      "Prefix query with %. for subdomain search",
+      false,
+    )
     .option("-e, --exclude-expired", "Exclude expired certificates", false)
-    .option("-f, --format <format>", "Output format: json (default), table, subdomains", "json")
+    .option(
+      "-f, --format <format>",
+      "Output format: json (default), table, subdomains",
+      "json",
+    )
     .option("-d, --dedupe", "Deduplicate results by serial number", false)
-    .action(async (domain: string, opts: { wildcard: boolean; excludeExpired: boolean; format: string; dedupe: boolean }) => {
-      const validFormats = ["json", "table", "subdomains"];
-      if (opts.format.startsWith("-")) {
-        console.error(formatError("--format requires a value (json, table, subdomains)", "MISSING_VALUE"));
-        process.exit(1);
-      }
-      if (!validFormats.includes(opts.format)) {
-        console.error(formatError(`Unknown format: ${opts.format}`, "UNKNOWN_FORMAT"));
-        process.exit(1);
-      }
+    .action(
+      async (
+        domain: string,
+        opts: {
+          wildcard: boolean;
+          excludeExpired: boolean;
+          format: string;
+          dedupe: boolean;
+        },
+      ) => {
+        const validFormats = ["json", "table", "subdomains"];
+        if (opts.format.startsWith("-")) {
+          console.error(
+            formatError(
+              "--format requires a value (json, table, subdomains)",
+              "MISSING_VALUE",
+            ),
+          );
+          process.exit(1);
+        }
+        if (!validFormats.includes(opts.format)) {
+          console.error(
+            formatError(`Unknown format: ${opts.format}`, "UNKNOWN_FORMAT"),
+          );
+          process.exit(1);
+        }
 
-      let results = await searchCertificates(domain, {
-        wildcard: opts.wildcard,
-        excludeExpired: opts.excludeExpired,
-      });
+        let results = await searchCertificates(domain, {
+          wildcard: opts.wildcard,
+          excludeExpired: opts.excludeExpired,
+        });
 
-      if (opts.dedupe) {
-        results = dedupeBySerial(results);
-      }
+        if (opts.dedupe) {
+          results = dedupeBySerial(results);
+        }
 
-      switch (opts.format) {
-        case "json":
-          console.log(formatJson(results));
-          break;
-        case "table":
-          console.log(formatTable(results));
-          break;
-        case "subdomains":
-          console.log(formatSubdomains(extractSubdomains(results)));
-          break;
-      }
-    });
+        switch (opts.format) {
+          case "json":
+            console.log(formatJson(results));
+            break;
+          case "table":
+            console.log(formatTable(results));
+            break;
+          case "subdomains":
+            console.log(formatSubdomains(extractSubdomains(results)));
+            break;
+        }
+      },
+    );
 
   program
     .command("subdomains")
@@ -195,8 +227,8 @@ function buildProgram() {
             note: "crt.sh does not provide a JSON API for individual certificates. Visit the URL for full details.",
           },
           null,
-          2
-        )
+          2,
+        ),
       );
     });
 
@@ -224,7 +256,7 @@ async function main() {
   const commands = ["search", "subdomains", "cert"];
   const hasHelp = rawArgs.includes("--help") || rawArgs.includes("-h");
   const hasVersion = rawArgs.includes("--version") || rawArgs.includes("-V");
-  const firstNonFlag = rawArgs.find(a => !a.startsWith("-"));
+  const firstNonFlag = rawArgs.find((a) => !a.startsWith("-"));
 
   if (!firstNonFlag && !hasHelp && !hasVersion) {
     // Flags-only (no command) → help + exit 1
@@ -237,8 +269,8 @@ async function main() {
     console.error(
       formatError(
         `Unknown command: ${firstNonFlag}. Run 'crt --help' for usage.`,
-        "UNKNOWN_COMMAND"
-      )
+        "UNKNOWN_COMMAND",
+      ),
     );
     process.exit(1);
   }
@@ -279,8 +311,8 @@ async function main() {
       console.error(
         formatError(
           err instanceof Error ? err.message : String(err),
-          "UNKNOWN_ERROR"
-        )
+          "UNKNOWN_ERROR",
+        ),
       );
       process.exit(1);
     }

@@ -44,7 +44,10 @@ describe("buildUrl", () => {
   });
 
   test("combines wildcard and excludeExpired", () => {
-    const url = buildUrl("example.com", { wildcard: true, excludeExpired: true });
+    const url = buildUrl("example.com", {
+      wildcard: true,
+      excludeExpired: true,
+    });
     const params = new URL(url).searchParams;
     expect(params.get("q")).toBe("%.example.com");
     expect(params.get("exclude")).toBe("expired");
@@ -56,4 +59,3 @@ describe("buildUrl", () => {
     expect(params.get("output")).toBe("json");
   });
 });
-

@@ -1,19 +1,19 @@
 import { describe, expect, test } from "bun:test";
+import type { CrtShEntry } from "../src/lib";
 import {
-  searchCertificates,
+  buildUrl,
+  CrtShEntrySchema,
+  CrtShError,
+  CrtShResponseSchema,
   dedupeBySerial,
   extractSubdomains,
-  buildUrl,
-  CrtShError,
-  validateCertId,
-  formatJson,
-  formatTable,
-  formatSubdomains,
   formatError,
-  CrtShEntrySchema,
-  CrtShResponseSchema,
+  formatJson,
+  formatSubdomains,
+  formatTable,
+  searchCertificates,
+  validateCertId,
 } from "../src/lib";
-import type { CrtShEntry, CrtShResponse } from "../src/lib";
 
 describe("lib barrel export", () => {
   test("exports all API functions", () => {
@@ -77,7 +77,10 @@ describe("lib barrel export", () => {
     };
 
     expect(JSON.parse(formatJson([entry]))).toHaveLength(1);
-    expect(extractSubdomains([entry])).toEqual(["a.example.com", "b.example.com"]);
+    expect(extractSubdomains([entry])).toEqual([
+      "a.example.com",
+      "b.example.com",
+    ]);
     expect(buildUrl("example.com")).toContain("crt.sh");
     expect(validateCertId("123")).toEqual({ valid: true, certId: 123 });
   });

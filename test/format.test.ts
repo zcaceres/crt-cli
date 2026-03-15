@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { formatJson, formatTable, formatSubdomains, formatError } from "../src/format";
+import {
+  formatError,
+  formatJson,
+  formatSubdomains,
+  formatTable,
+} from "../src/format";
 import type { CrtShEntry } from "../src/schemas";
 
 function makeEntry(overrides: Partial<CrtShEntry> = {}): CrtShEntry {
@@ -60,7 +65,9 @@ describe("formatTable", () => {
   });
 
   test("includes entry data in rows", () => {
-    const output = formatTable([makeEntry({ id: 42, common_name: "test.com" })]);
+    const output = formatTable([
+      makeEntry({ id: 42, common_name: "test.com" }),
+    ]);
     expect(output).toContain("42");
     expect(output).toContain("test.com");
   });

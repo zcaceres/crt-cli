@@ -1,11 +1,11 @@
-import { CrtShResponseSchema } from "./schemas";
 import type { CrtShEntry } from "./schemas";
+import { CrtShResponseSchema } from "./schemas";
 
 /** Error thrown by crt.sh API operations. The `code` field identifies the error category. */
 export class CrtShError extends Error {
   constructor(
     message: string,
-    public code: string
+    public code: string,
   ) {
     super(message);
     this.name = "CrtShError";
@@ -21,7 +21,7 @@ export class CrtShError extends Error {
  */
 export function buildUrl(
   query: string,
-  options?: { wildcard?: boolean; excludeExpired?: boolean }
+  options?: { wildcard?: boolean; excludeExpired?: boolean },
 ): string {
   let q = query;
   if (options?.wildcard && !query.startsWith("%.")) {
@@ -47,21 +47,25 @@ export const MAX_RETRIES = 3;
  */
 export async function fetchWithRetry(
   url: string,
-  options: { baseDelay: number; fetchFn: typeof fetch }
+  options: { baseDelay: number; fetchFn: typeof fetch },
 ): Promise<Response> {
   let lastError: CrtShError | undefined;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     if (attempt > 0) {
-      await new Promise(r => setTimeout(r, options.baseDelay * 2 ** (attempt - 1)));
+      await new Promise((r) =>
+        setTimeout(r, options.baseDelay * 2 ** (attempt - 1)),
+      );
     }
 
     let response: Response;
     try {
-      response = await options.fetchFn(url, { signal: AbortSignal.timeout(30_000) });
+      response = await options.fetchFn(url, {
+        signal: AbortSignal.timeout(30_000),
+      });
     } catch (err) {
       lastError = new CrtShError(
         `Network error: ${err instanceof Error ? err.message : String(err)}`,
-        "NETWORK_ERROR"
+        "NETWORK_ERROR",
       );
       continue;
     }
@@ -69,7 +73,7 @@ export async function fetchWithRetry(
     if (response.status === 502) {
       lastError = new CrtShError(
         "crt.sh returned 502 (server error or rate limit)",
-        "SERVER_ERROR"
+        "SERVER_ERROR",
       );
       continue;
     }
@@ -77,14 +81,14 @@ export async function fetchWithRetry(
     if (!response.ok) {
       throw new CrtShError(
         `crt.sh returned HTTP ${response.status}`,
-        "HTTP_ERROR"
+        "HTTP_ERROR",
       );
     }
 
     return response;
   }
 
-  throw lastError!;
+  throw lastError as CrtShError;
 }
 
 /**
@@ -98,11 +102,14 @@ export async function fetchWithRetry(
  */
 export async function searchCertificates(
   query: string,
-  options?: { wildcard?: boolean; excludeExpired?: boolean }
+  options?: { wildcard?: boolean; excludeExpired?: boolean },
 ): Promise<CrtShEntry[]> {
   const url = buildUrl(query, options);
 
-  const response = await fetchWithRetry(url, { baseDelay: 1000, fetchFn: fetch });
+  const response = await fetchWithRetry(url, {
+    baseDelay: 1000,
+    fetchFn: fetch,
+  });
 
   let text: string;
   try {
@@ -110,7 +117,7 @@ export async function searchCertificates(
   } catch (err) {
     throw new CrtShError(
       `Network error reading response: ${err instanceof Error ? err.message : String(err)}`,
-      "NETWORK_ERROR"
+      "NETWORK_ERROR",
     );
   }
   if (!text.trim() || text.trim() === "[]") {
@@ -128,7 +135,7 @@ export async function searchCertificates(
   if (!result.success) {
     throw new CrtShError(
       `Schema validation failed: ${result.error.message}`,
-      "VALIDATION_ERROR"
+      "VALIDATION_ERROR",
     );
   }
 
@@ -154,7 +161,9 @@ export function dedupeBySerial(entries: CrtShEntry[]): CrtShEntry[] {
  * @param id - Raw string to validate as a crt.sh certificate ID.
  * @returns Object with `valid: true` and parsed `certId`, or `valid: false` with `reason`.
  */
-export function validateCertId(id: string): { valid: true; certId: number } | { valid: false; reason: string } {
+export function validateCertId(
+  id: string,
+): { valid: true; certId: number } | { valid: false; reason: string } {
   if (!/^\d+$/.test(id)) {
     return { valid: false, reason: `Invalid certificate ID: ${id}` };
   }

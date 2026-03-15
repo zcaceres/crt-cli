@@ -1,13 +1,19 @@
-import { describe, expect, test, mock, beforeAll, afterAll } from "bun:test";
+import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import fixture from "../fixtures/example-com.json";
-import type { CrtShEntry } from "../src/schemas";
 import { CrtShError } from "../src/api";
+import type { CrtShEntry } from "../src/schemas";
 
 // Mock searchCertificates at the module level so createServer picks it up
-const mockSearchCertificates = mock<(query: string, options?: { wildcard?: boolean; excludeExpired?: boolean }) => Promise<CrtShEntry[]>>();
+const mockSearchCertificates =
+  mock<
+    (
+      query: string,
+      options?: { wildcard?: boolean; excludeExpired?: boolean },
+    ) => Promise<CrtShEntry[]>
+  >();
 
 mock.module("../src/api", () => {
   const actual = require("../src/api");
@@ -27,7 +33,8 @@ client = new Client({ name: "test-client", version: "1.0.0" });
 
 beforeAll(async () => {
   server = createServer();
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const [clientTransport, serverTransport] =
+    InMemoryTransport.createLinkedPair();
   await Promise.all([
     client.connect(clientTransport),
     server.connect(serverTransport),
@@ -63,7 +70,9 @@ describe("MCP server entry point", () => {
 
     // Read response with timeout
     const reader = proc.stdout.getReader();
-    const timeout = setTimeout(() => { proc.kill(); }, 5000);
+    const timeout = setTimeout(() => {
+      proc.kill();
+    }, 5000);
 
     let buf = "";
     while (true) {
@@ -97,7 +106,11 @@ describe("MCP server", () => {
     test("lists all three tools", async () => {
       const result = await client.listTools();
       const names = result.tools.map((t) => t.name).sort();
-      expect(names).toEqual(["find_subdomains", "lookup_cert", "search_certificates"]);
+      expect(names).toEqual([
+        "find_subdomains",
+        "lookup_cert",
+        "search_certificates",
+      ]);
     });
 
     test("search_certificates has correct input schema", async () => {
@@ -130,7 +143,10 @@ describe("MCP server", () => {
   describe("search_certificates", () => {
     test("returns JSON formatted results by default", async () => {
       mockSearchCertificates.mockResolvedValueOnce(fixture as CrtShEntry[]);
-      const result = await client.callTool({ name: "search_certificates", arguments: { domain: "example.com" } });
+      const result = await client.callTool({
+        name: "search_certificates",
+        arguments: { domain: "example.com" },
+      });
       const content = result.content as Array<{ type: string; text: string }>;
       expect(content).toHaveLength(1);
       expect(content[0].type).toBe("text");
@@ -143,22 +159,43 @@ describe("MCP server", () => {
       mockSearchCertificates.mockResolvedValueOnce([]);
       await client.callTool({
         name: "search_certificates",
-        arguments: { domain: "example.com", wildcard: true, excludeExpired: true },
+        arguments: {
+          domain: "example.com",
+          wildcard: true,
+          excludeExpired: true,
+        },
       });
-      expect(mockSearchCertificates).toHaveBeenLastCalledWith("example.com", { wildcard: true, excludeExpired: true });
+      expect(mockSearchCertificates).toHaveBeenLastCalledWith("example.com", {
+        wildcard: true,
+        excludeExpired: true,
+      });
     });
 
     test("deduplicates results when dedupe is true", async () => {
       const dupes: CrtShEntry[] = [
         {
-          issuer_ca_id: 1, issuer_name: "CA", common_name: "a.com", name_value: "a.com",
-          id: 1, entry_timestamp: null, not_before: "2024-01-01", not_after: "2025-01-01",
-          serial_number: "same", result_count: 1,
+          issuer_ca_id: 1,
+          issuer_name: "CA",
+          common_name: "a.com",
+          name_value: "a.com",
+          id: 1,
+          entry_timestamp: null,
+          not_before: "2024-01-01",
+          not_after: "2025-01-01",
+          serial_number: "same",
+          result_count: 1,
         },
         {
-          issuer_ca_id: 1, issuer_name: "CA", common_name: "a.com", name_value: "a.com",
-          id: 2, entry_timestamp: null, not_before: "2024-01-01", not_after: "2025-01-01",
-          serial_number: "same", result_count: 1,
+          issuer_ca_id: 1,
+          issuer_name: "CA",
+          common_name: "a.com",
+          name_value: "a.com",
+          id: 2,
+          entry_timestamp: null,
+          not_before: "2024-01-01",
+          not_after: "2025-01-01",
+          serial_number: "same",
+          result_count: 1,
         },
       ];
       mockSearchCertificates.mockResolvedValueOnce(dupes);
@@ -185,10 +222,16 @@ describe("MCP server", () => {
     test("returns subdomains format", async () => {
       const entries: CrtShEntry[] = [
         {
-          issuer_ca_id: 1, issuer_name: "CA", common_name: "example.com",
+          issuer_ca_id: 1,
+          issuer_name: "CA",
+          common_name: "example.com",
           name_value: "a.example.com\nb.example.com",
-          id: 1, entry_timestamp: null, not_before: "2024-01-01", not_after: "2025-01-01",
-          serial_number: "abc", result_count: 1,
+          id: 1,
+          entry_timestamp: null,
+          not_before: "2024-01-01",
+          not_after: "2025-01-01",
+          serial_number: "abc",
+          result_count: 1,
         },
       ];
       mockSearchCertificates.mockResolvedValueOnce(entries);
@@ -212,7 +255,9 @@ describe("MCP server", () => {
     });
 
     test("returns isError on CrtShError", async () => {
-      mockSearchCertificates.mockRejectedValueOnce(new CrtShError("rate limited", "SERVER_ERROR"));
+      mockSearchCertificates.mockRejectedValueOnce(
+        new CrtShError("rate limited", "SERVER_ERROR"),
+      );
       const result = await client.callTool({
         name: "search_certificates",
         arguments: { domain: "example.com" },
@@ -242,10 +287,16 @@ describe("MCP server", () => {
     test("returns subdomain list", async () => {
       const entries: CrtShEntry[] = [
         {
-          issuer_ca_id: 1, issuer_name: "CA", common_name: "example.com",
+          issuer_ca_id: 1,
+          issuer_name: "CA",
+          common_name: "example.com",
           name_value: "mail.example.com\nwww.example.com",
-          id: 1, entry_timestamp: null, not_before: "2024-01-01", not_after: "2025-01-01",
-          serial_number: "abc", result_count: 1,
+          id: 1,
+          entry_timestamp: null,
+          not_before: "2024-01-01",
+          not_after: "2025-01-01",
+          serial_number: "abc",
+          result_count: 1,
         },
       ];
       mockSearchCertificates.mockResolvedValueOnce(entries);
@@ -264,7 +315,10 @@ describe("MCP server", () => {
         name: "find_subdomains",
         arguments: { domain: "example.com" },
       });
-      expect(mockSearchCertificates).toHaveBeenLastCalledWith("example.com", { wildcard: true, excludeExpired: false });
+      expect(mockSearchCertificates).toHaveBeenLastCalledWith("example.com", {
+        wildcard: true,
+        excludeExpired: false,
+      });
     });
 
     test("passes excludeExpired option", async () => {
@@ -273,7 +327,10 @@ describe("MCP server", () => {
         name: "find_subdomains",
         arguments: { domain: "example.com", excludeExpired: true },
       });
-      expect(mockSearchCertificates).toHaveBeenLastCalledWith("example.com", { wildcard: true, excludeExpired: true });
+      expect(mockSearchCertificates).toHaveBeenLastCalledWith("example.com", {
+        wildcard: true,
+        excludeExpired: true,
+      });
     });
 
     test("returns 'No subdomains found.' for empty results", async () => {
@@ -287,7 +344,9 @@ describe("MCP server", () => {
     });
 
     test("returns isError on CrtShError", async () => {
-      mockSearchCertificates.mockRejectedValueOnce(new CrtShError("network fail", "NETWORK_ERROR"));
+      mockSearchCertificates.mockRejectedValueOnce(
+        new CrtShError("network fail", "NETWORK_ERROR"),
+      );
       const result = await client.callTool({
         name: "find_subdomains",
         arguments: { domain: "example.com" },

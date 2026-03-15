@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { searchCertificates, extractSubdomains } from "../src/api";
+import { extractSubdomains, searchCertificates } from "../src/api";
 
 const INTEGRATION = !!process.env.INTEGRATION;
 
@@ -32,10 +32,13 @@ describe.skipIf(!INTEGRATION)("integration tests (real crt.sh)", () => {
   }, 60_000);
 
   test("CLI E2E — search example.com exits 0 with valid JSON", async () => {
-    const proc = Bun.spawn(["bun", "run", "src/index.ts", "search", "example.com"], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+    const proc = Bun.spawn(
+      ["bun", "run", "src/index.ts", "search", "example.com"],
+      {
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
     const stdout = await new Response(proc.stdout).text();
     const exitCode = await proc.exited;
 

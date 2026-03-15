@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { CrtShEntrySchema, CrtShResponseSchema } from "../src/schemas";
-import { buildUrl, dedupeBySerial, extractSubdomains } from "../src/api";
 import fixture from "../fixtures/example-com.json";
+import { buildUrl, dedupeBySerial, extractSubdomains } from "../src/api";
+import { CrtShEntrySchema, CrtShResponseSchema } from "../src/schemas";
 
 describe("CrtShResponseSchema", () => {
   test("validates real fixture data", () => {
