@@ -30,7 +30,12 @@ jobs:
       - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      - run: INTEGRATION=1 bun test test/integration.test.ts
+      - name: Run integration tests
+        id: integration
+        run: INTEGRATION=1 bun test test/integration.test.ts
+      - name: Warn on integration failure
+        if: steps.integration.outcome == 'failure'
+        run: echo "::warning::Integration tests failed — crt.sh may be down or rate-limiting. Review the logs above."
 
   release:
     needs: [lint, test]

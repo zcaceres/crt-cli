@@ -212,4 +212,20 @@ describe("CLI integration", () => {
       expect(stdout).toContain("domains");
     });
   });
+
+  describe("domain validation", () => {
+    test("rejects domain without dots", async () => {
+      const { stderr, exitCode } = await run("search", "localhost");
+      expect(exitCode).toBe(1);
+      const parsed = JSON.parse(stderr);
+      expect(parsed.code).toBe("INVALID_DOMAIN");
+    });
+
+    test("rejects empty-like domain in subdomains command", async () => {
+      const { stderr, exitCode } = await run("subdomains", "nodots");
+      expect(exitCode).toBe(1);
+      const parsed = JSON.parse(stderr);
+      expect(parsed.code).toBe("INVALID_DOMAIN");
+    });
+  });
 });

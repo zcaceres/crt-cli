@@ -1,5 +1,10 @@
 import { describe, expect, mock, test } from "bun:test";
-import { buildUrl, CrtShError, searchMultipleDomains } from "../src/api";
+import {
+  buildUrl,
+  CrtShError,
+  searchMultipleDomains,
+  validateDomain,
+} from "../src/api";
 import type { CrtShEntry } from "../src/schemas";
 
 function makeEntry(overrides: Partial<CrtShEntry> = {}): CrtShEntry {
@@ -127,5 +132,43 @@ describe("searchMultipleDomains", () => {
     const { results, errors } = await searchMultipleDomains([]);
     expect(results.size).toBe(0);
     expect(errors.size).toBe(0);
+  });
+});
+
+describe("validateDomain", () => {
+  test("accepts valid domains", () => {
+    expect(validateDomain("example.com")).toEqual({ valid: true });
+    expect(validateDomain("sub.example.com")).toEqual({ valid: true });
+    expect(validateDomain("my-site.co.uk")).toEqual({ valid: true });
+  });
+
+  test("accepts wildcard patterns", () => {
+    expect(validateDomain("%.example.com")).toEqual({ valid: true });
+    expect(validateDomain("*.example.com")).toEqual({ valid: true });
+  });
+
+  test("rejects empty string", () => {
+    const result = validateDomain("");
+    expect(result.valid).toBe(false);
+    if (!result.valid) expect(result.reason).toContain("empty");
+  });
+
+  test("rejects domain without dots", () => {
+    const result = validateDomain("localhost");
+    expect(result.valid).toBe(false);
+    if (!result.valid) expect(result.reason).toContain("dot");
+  });
+
+  test("rejects domain with spaces", () => {
+    const result = validateDomain("example .com");
+    expect(result.valid).toBe(false);
+    if (!result.valid) expect(result.reason).toContain("invalid characters");
+  });
+
+  test("rejects overly long domain", () => {
+    const long = `${"a".repeat(250)}.com`;
+    const result = validateDomain(long);
+    expect(result.valid).toBe(false);
+    if (!result.valid) expect(result.reason).toContain("too long");
   });
 });

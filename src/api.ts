@@ -226,6 +226,41 @@ export async function searchMultipleDomains(
 }
 
 /**
+ * Validate a domain string for use with crt.sh.
+ * Rejects empty input, domains without dots, invalid characters, and overly long domains.
+ * @param domain - Raw domain string to validate.
+ * @returns Object with `valid: true` or `valid: false` with `reason`.
+ */
+export function validateDomain(
+  domain: string,
+): { valid: true } | { valid: false; reason: string } {
+  const trimmed = domain.trim();
+  if (!trimmed) {
+    return { valid: false, reason: "Domain must not be empty" };
+  }
+  if (trimmed.length > 253) {
+    return {
+      valid: false,
+      reason: `Domain too long (${trimmed.length} chars, max 253)`,
+    };
+  }
+  if (!trimmed.includes(".")) {
+    return {
+      valid: false,
+      reason: `Invalid domain: ${trimmed} (must contain at least one dot)`,
+    };
+  }
+  // Allow alphanumeric, dots, hyphens, wildcards (*, %), and underscores (used in some DNS records)
+  if (!/^[a-zA-Z0-9.*%_-]+(\.[a-zA-Z0-9.*%_-]+)*$/.test(trimmed)) {
+    return {
+      valid: false,
+      reason: `Invalid domain: ${trimmed} (contains invalid characters)`,
+    };
+  }
+  return { valid: true };
+}
+
+/**
  * Extract unique subdomains from certificate `name_value` fields.
  * @param entries - Certificate entries to extract subdomains from.
  * @returns Sorted, deduplicated array of lowercase subdomain strings.

@@ -117,11 +117,11 @@ describe("MCP server", () => {
       const result = await client.listTools();
       const tool = result.tools.find((t) => t.name === "search_certificates")!;
       expect(tool.inputSchema.properties).toHaveProperty("domain");
+      expect(tool.inputSchema.properties).toHaveProperty("domains");
       expect(tool.inputSchema.properties).toHaveProperty("wildcard");
       expect(tool.inputSchema.properties).toHaveProperty("excludeExpired");
       expect(tool.inputSchema.properties).toHaveProperty("dedupe");
       expect(tool.inputSchema.properties).toHaveProperty("format");
-      expect(tool.inputSchema.required).toContain("domain");
     });
 
     test("find_subdomains has correct input schema", async () => {
@@ -266,6 +266,63 @@ describe("MCP server", () => {
       const content = result.content as Array<{ type: string; text: string }>;
       expect(content[0].text).toContain("SERVER_ERROR");
       expect(content[0].text).toContain("rate limited");
+    });
+
+    test("returns CSV format", async () => {
+      mockSearchCertificates.mockResolvedValueOnce(fixture as CrtShEntry[]);
+      const result = await client.callTool({
+        name: "search_certificates",
+        arguments: { domain: "example.com", format: "csv" },
+      });
+      const content = result.content as Array<{ type: string; text: string }>;
+      expect(content[0].text).toContain("issuer_ca_id,issuer_name,common_name");
+    });
+
+    test("multi-domain search returns grouped JSON", async () => {
+      mockSearchCertificates
+        .mockResolvedValueOnce(fixture as CrtShEntry[])
+        .mockResolvedValueOnce([]);
+      const result = await client.callTool({
+        name: "search_certificates",
+        arguments: { domains: ["example.com", "example.org"] },
+      });
+      const content = result.content as Array<{ type: string; text: string }>;
+      const parsed = JSON.parse(content[0].text);
+      expect(parsed["example.com"]).toHaveProperty("entries");
+      expect(parsed["example.org"]).toHaveProperty("entries");
+    });
+
+    test("multi-domain search with table format", async () => {
+      mockSearchCertificates
+        .mockResolvedValueOnce(fixture as CrtShEntry[])
+        .mockResolvedValueOnce([]);
+      const result = await client.callTool({
+        name: "search_certificates",
+        arguments: { domains: ["example.com", "example.org"], format: "table" },
+      });
+      const content = result.content as Array<{ type: string; text: string }>;
+      expect(content[0].text).toContain("=== example.com ===");
+      expect(content[0].text).toContain("=== example.org ===");
+    });
+
+    test("returns error when neither domain nor domains provided", async () => {
+      const result = await client.callTool({
+        name: "search_certificates",
+        arguments: {},
+      });
+      expect(result.isError).toBe(true);
+      const content = result.content as Array<{ type: string; text: string }>;
+      expect(content[0].text).toContain("MISSING_ARG");
+    });
+
+    test("returns error for invalid domain", async () => {
+      const result = await client.callTool({
+        name: "search_certificates",
+        arguments: { domain: "notadomain" },
+      });
+      expect(result.isError).toBe(true);
+      const content = result.content as Array<{ type: string; text: string }>;
+      expect(content[0].text).toContain("INVALID_DOMAIN");
     });
 
     test("re-throws non-CrtShError errors", async () => {
