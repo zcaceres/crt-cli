@@ -46,6 +46,14 @@ crt subdomains example.com -e
 crt cert 12345678
 ```
 
+### Global flags
+
+| Flag | Alias | Description |
+|------|-------|-------------|
+| `--version` | `-V` | Print version |
+| `--describe` | | Output JSON schema of all commands (see below) |
+| `--help` | `-h` | Show help |
+
 ### Machine-readable description
 
 ```bash
@@ -126,7 +134,7 @@ const server = createServer();
 | `extractSubdomains` | function | Extract sorted unique subdomains from entries |
 | `buildUrl` | function | Build a crt.sh query URL |
 | `validateCertId` | function | Validate a certificate ID string |
-| `CrtShError` | class | Error class with code (`NETWORK_ERROR`, `SERVER_ERROR`, `HTTP_ERROR`, `PARSE_ERROR`, `VALIDATION_ERROR`) |
+| `CrtShError` | class | Error class with code (`NETWORK_ERROR`, `SERVER_ERROR`, `HTTP_ERROR`, `PARSE_ERROR`, `VALIDATION_ERROR`, `INVALID_ARG`) |
 | `formatJson` | function | Format entries as pretty-printed JSON |
 | `formatTable` | function | Format entries as an ASCII table |
 | `formatSubdomains` | function | Format subdomains as a newline-separated list |
@@ -143,8 +151,17 @@ const server = createServer();
 bun test
 ```
 
-124 tests across 8 files covering the CLI, API, formatters, argument parsing, schema validation, library exports, and MCP server.
+108 tests across 9 files covering the CLI, API, formatters, argument parsing, schema validation, library exports, and MCP server.
+
+## Linting
+
+```bash
+bun run check        # lint and format check
+bun run check:fix    # auto-fix
+```
+
+Uses [Biome](https://biomejs.dev/) for linting and formatting.
 
 ## CI/CD
 
-GitHub Actions runs tests on every push and PR to `main`. On push to `main`, if the version in `package.json` has changed, it builds standalone Linux binaries (`crt-linux-x64`, `crt-mcp-linux-x64`) and creates a GitHub release.
+GitHub Actions runs lint and tests on every push and PR to `main`. On push to `main`, if the version in `package.json` has changed, it builds standalone binaries for Linux (x64, arm64), macOS (x64, arm64), and Windows (x64) and creates a GitHub release.
